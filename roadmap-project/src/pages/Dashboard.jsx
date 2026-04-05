@@ -4,70 +4,110 @@ import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
 
 function Dashboard() {
-  const { width, height } = useWindowSize(); // For the confetti size
+  const { width, height } = useWindowSize();
   const location = useLocation();
-  const userDomain = location.state?.domain || "Data Science"; 
-  const userSkillLevel = location.state?.skillLevel || "Intermediate"; 
+  const USER_ID = 1; // Simulating a logged-in user
 
-  const getInitialTasks = () => {
-    if (userDomain === "Full Stack Dev") {
-      return [
+  // We start with loading set to TRUE so the screen waits for the DB
+  const [isLoadingDB, setIsLoadingDB] = useState(true);
+  const [userDomain, setUserDomain] = useState(location.state?.domain || "Data Science");
+  const [tasks, setTasks] = useState([]);
+  const [skills, setSkills] = useState({ python: 0, ml: 0, projects: 0, certs: 0 });
+  
+  const [isPredicting, setIsPredicting] = useState(false);
+  const [aiPrediction, setAiPrediction] = useState({ placement_ready: true, message: "Evaluating...", confidence: 0 });
+
+  // NEW: 1. Fetch Data from SQLite on Component Load
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/api/user/${USER_ID}/load`);
+        const data = await response.json();
+
+        if (data.exists) {
+          // User exists in DB! Load their saved progress
+          setUserDomain(data.domain);
+          setSkills(data.skills);
+          setTasks(data.tasks);
+        } else {
+          // First time logging in: Generate initial tasks and save to DB
+          generateInitialSetup();
+        }
+      } catch (error) {
+        console.error("DB Load Error:", error);
+        generateInitialSetup(); // Fallback if server is down
+      }
+      setIsLoadingDB(false);
+    };
+
+    loadUserData();
+  }, []); // Empty array means this runs ONCE when the page loads
+
+  // Fallback function to generate tasks if DB is empty
+  const generateInitialSetup = () => {
+    const domain = location.state?.domain || "Data Science";
+    const level = location.state?.skillLevel || "Intermediate";
+    
+    let initialTasks = [
+      { id: 1, text: "Advanced Machine Learning", completed: true },
+      { id: 2, text: "Build a Major Project", completed: false },
+      { id: 3, text: "Participate in Hackathon", completed: false },
+      { id: 4, text: "Earn Certification", completed: false }
+    ];
+    if (domain === "Full Stack Dev") {
+      initialTasks = [
         { id: 1, text: "Advanced React Patterns", completed: true },
         { id: 2, text: "Build a Full-Stack E-Commerce App", completed: false },
         { id: 3, text: "Setup Docker Containers", completed: false },
         { id: 4, text: "Deploy to AWS", completed: false }
       ];
-    } else if (userDomain === "UI/UX Design") {
-      return [
-        { id: 1, text: "Master Figma Prototypes", completed: true },
-        { id: 2, text: "Conduct User Research", completed: false },
-        { id: 3, text: "Design a Mobile App UI", completed: false },
-        { id: 4, text: "Build a Portfolio Site", completed: false }
-      ];
-    } else {
-      return [
-        { id: 1, text: "Advanced Machine Learning", completed: true },
-        { id: 2, text: "Build a Major Project", completed: false },
-        { id: 3, text: "Participate in Hackathon", completed: false },
-        { id: 4, text: "Earn Certification", completed: false }
-      ];
     }
+    setTasks(initialTasks);
+
+    let base = level === 'Beginner' ? 25 : level === 'Intermediate' ? 50 : 80;
+    setSkills({ python: Math.min(base + 10, 100), ml: base, projects: base - 10, certs: base - 20 });
   };
 
-  const getInitialSkills = () => {
-    let base = userSkillLevel === 'Beginner' ? 25 : userSkillLevel === 'Intermediate' ? 50 : 80;
-    return { python: Math.min(base + 10, 100), ml: base, projects: base - 10, certs: base - 20 };
-  };
-
-  const [tasks, setTasks] = useState(getInitialTasks());
-  const [skills, setSkills] = useState(getInitialSkills());
-  
-  // NEW: Loading state for the UI
-  const [isPredicting, setIsPredicting] = useState(false);
-  const [aiPrediction, setAiPrediction] = useState({ placement_ready: true, message: "Evaluating...", confidence: 0 });
-
+  // NEW: 2. Save Data to SQLite whenever Tasks/Skills change
   useEffect(() => {
+    if (isLoadingDB) return; // Don't save while initially loading
+
+    const saveUserData = async () => {
+      try {
+        await fetch(`http://127.0.0.1:8000/api/user/${USER_ID}/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            domain: userDomain,
+            skills: skills,
+            tasks: tasks
+          })
+        });
+      } catch (error) {
+        console.error("Failed to save to DB:", error);
+      }
+    };
+
+    saveUserData();
+  }, [tasks, skills, userDomain]); // Triggers every time these change!
+
+  // 3. The AI Prediction Effect
+  useEffect(() => {
+    if (isLoadingDB) return;
+    
     const fetchPrediction = async () => {
-      setIsPredicting(true); // Start loading spinner
+      setIsPredicting(true);
       try {
         const response = await fetch('http://127.0.0.1:8000/api/predict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(skills) 
         });
-        
         if (response.ok) {
           const data = await response.json();
-          // Simulate a tiny delay so the user actually sees the AI "thinking"
-          setTimeout(() => {
-            setAiPrediction(data); 
-            setIsPredicting(false); // Stop loading spinner
-          }, 600);
+          setTimeout(() => { setAiPrediction(data); setIsPredicting(false); }, 600);
         }
-      } catch (error) {
-        console.error("Backend connection failed.", error);
-        setIsPredicting(false);
-      }
+      } catch (error) { setIsPredicting(false); }
     };
     fetchPrediction();
   }, [skills]);
@@ -88,13 +128,17 @@ function Dashboard() {
     }));
   };
 
+  if (isLoadingDB) {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-4 border-[#1e40af]"></div></div>;
+  }
+
   const completedTasksCount = tasks.filter(t => t.completed).length;
   const progressPercentage = Math.round((completedTasksCount / tasks.length) * 100);
 
   const generateSkillGaps = () => {
     const gaps = [];
-    const mainSkillName = userDomain === "Full Stack Dev" ? "Advanced JavaScript" : userDomain === "UI/UX Design" ? "Interaction Design" : "Advanced Python";
-    const subSkillName = userDomain === "Full Stack Dev" ? "Backend Architecture" : userDomain === "UI/UX Design" ? "Wireframing" : "Deep Learning Math";
+    const mainSkillName = userDomain === "Full Stack Dev" ? "Advanced JavaScript" : "Advanced Python";
+    const subSkillName = userDomain === "Full Stack Dev" ? "Backend Architecture" : "Deep Learning Math";
 
     if (skills.python < 75) gaps.push({ skill: mainSkillName, status: "Needed", color: "bg-[#ea580c]" });
     if (skills.ml < 65) gaps.push({ skill: subSkillName, status: "Review", color: "bg-amber-500" });
@@ -109,7 +153,6 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-10">
-      {/* NEW: Render Confetti if 100% complete! */}
       {progressPercentage === 100 && <Confetti width={width} height={height} recycle={false} numberOfPieces={500} />}
       
       <header className="bg-[#1e40af] text-white py-4 px-6 shadow-md">
@@ -123,7 +166,7 @@ function Dashboard() {
         <div className="max-w-7xl mx-auto py-3 px-6 text-slate-700 font-medium flex items-center">
           <span>Welcome, <span className="text-[#1e40af] font-bold">Rahul!</span></span>
           <span className="text-slate-300 mx-3">|</span> 
-          <span>Target: <span className="font-bold">{userDomain}</span> ({userSkillLevel})</span>
+          <span>Target: <span className="font-bold">{userDomain}</span></span>
         </div>
       </div>
 
@@ -143,7 +186,6 @@ function Dashboard() {
                   <div className="font-bold relative z-10">2nd Year</div>
                   <div className="text-sm opacity-90 relative z-10">Projects & Hackathons</div>
                   <div className="text-xs mt-1 font-medium flex items-center gap-1 relative z-10"><span>⚙️</span> In Progress</div>
-                  {/* Subtle pulsing background for the active year */}
                   <div className="absolute inset-0 bg-blue-500 animate-pulse opacity-50"></div>
                 </div>
                 <div className="p-3 bg-amber-400 text-white rounded-lg shadow-sm text-slate-800">
@@ -161,7 +203,6 @@ function Dashboard() {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all">
               <div className="flex items-center gap-3">
-                 {/* NEW: Loading Spinner logic */}
                  {isPredicting ? (
                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1e40af]"></div>
                  ) : (
@@ -180,7 +221,6 @@ function Dashboard() {
                    )}
                  </span>
               </div>
-              
               <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Model Confidence</span>
                 <span className="text-sm font-black text-[#1e40af]">{isPredicting ? '--' : `${aiPrediction.confidence}%`}</span>
@@ -196,9 +236,7 @@ function Dashboard() {
                       key={task.id} 
                       onClick={() => toggleTask(task.id)}
                       className={`flex items-center p-3 border rounded-lg transition-all duration-300 cursor-pointer shadow-sm transform hover:-translate-y-1
-                        ${task.completed 
-                          ? 'bg-green-50 border-green-200 hover:bg-green-100' 
-                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-blue-300 hover:shadow-md'}`}
+                        ${task.completed ? 'bg-green-50 border-green-200 hover:bg-green-100' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-blue-300'}`}
                     >
                        <div className={`rounded-full min-w-8 min-h-8 flex items-center justify-center font-bold mr-4 shadow-sm transition-colors duration-300
                          ${task.completed ? 'bg-green-500 text-white scale-110' : 'bg-blue-600 text-white'}`}>
@@ -212,10 +250,7 @@ function Dashboard() {
               </div>
 
               <div className="mt-6 bg-slate-200 rounded-full h-6 w-full overflow-hidden shadow-inner relative">
-                <div 
-                  className={`h-full transition-all duration-700 ease-out ${progressPercentage === 100 ? 'bg-green-500' : 'bg-blue-600'}`}
-                  style={{ width: `${progressPercentage}%` }}
-                ></div>
+                <div className={`h-full transition-all duration-700 ease-out ${progressPercentage === 100 ? 'bg-green-500' : 'bg-blue-600'}`} style={{ width: `${progressPercentage}%` }}></div>
                 <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
                   Progress: {progressPercentage}% Done
                 </div>
@@ -250,12 +285,6 @@ function Dashboard() {
                       ))}
                    </div>
                  </div>
-
-                 {skillGaps[0].status !== "On Track" && (
-                   <div className="mt-4 text-sm text-slate-700 bg-blue-50 p-3 rounded-lg border border-blue-200 shadow-inner animate-pulse">
-                      <span className="font-bold text-blue-800">💡 Tutor Advice:</span> Focus on <span className="font-bold text-blue-600 hover:underline cursor-pointer">{skillGaps[0].skill}</span> this week to boost your model confidence!
-                   </div>
-                 )}
                </div>
             </div>
           </div>

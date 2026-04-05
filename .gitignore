@@ -1,0 +1,11 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Database files
+*.db
+*.sqlite3
+
+# Node modules (just in case)
+node_modules/
+.env
