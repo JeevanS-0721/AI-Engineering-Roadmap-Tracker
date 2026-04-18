@@ -6,9 +6,9 @@ import { useWindowSize } from 'react-use';
 function Dashboard() {
   const { width, height } = useWindowSize();
   const location = useLocation();
-  const USER_ID = 1; // Simulating a logged-in user
+  const USER_ID = localStorage.getItem('userId') || 1; 
+  const userName = localStorage.getItem('userName') || "Student";
 
-  // We start with loading set to TRUE so the screen waits for the DB
   const [isLoadingDB, setIsLoadingDB] = useState(true);
   const [userDomain, setUserDomain] = useState(location.state?.domain || "Data Science");
   const [tasks, setTasks] = useState([]);
@@ -17,84 +17,95 @@ function Dashboard() {
   const [isPredicting, setIsPredicting] = useState(false);
   const [aiPrediction, setAiPrediction] = useState({ placement_ready: true, message: "Evaluating...", confidence: 0 });
 
-  // NEW: 1. Fetch Data from SQLite on Component Load
+  // NEW: State to hold our dynamic projects
+  const [recommendedProjects, setRecommendedProjects] = useState([]);
+
+  // 1. Updated Database Loader
   useEffect(() => {
     const loadUserData = async () => {
       try {
         const response = await fetch(`http://127.0.0.1:8000/api/user/${USER_ID}/load`);
         const data = await response.json();
 
-        if (data.exists) {
-          // User exists in DB! Load their saved progress
+        // IMPORTANT: Check if the user just clicked "Generate" on the Onboarding page
+        const hasNewOnboardingData = location.state?.domain ? true : false;
+
+        // Only load the database IF they have tasks AND they didn't just come from Onboarding
+        if (data.exists && data.tasks && data.tasks.length > 0 && !hasNewOnboardingData) {
           setUserDomain(data.domain);
           setSkills(data.skills);
           setTasks(data.tasks);
         } else {
-          // First time logging in: Generate initial tasks and save to DB
+          // Otherwise, build a fresh roadmap based on Onboarding!
           generateInitialSetup();
         }
       } catch (error) {
-        console.error("DB Load Error:", error);
-        generateInitialSetup(); // Fallback if server is down
+        generateInitialSetup(); 
       }
       setIsLoadingDB(false);
     };
 
     loadUserData();
-  }, []); // Empty array means this runs ONCE when the page loads
+  }, [USER_ID]); // Removed location.state from dependencies to prevent loops
 
-  // Fallback function to generate tasks if DB is empty
+  // 2. Updated Initial Setup
   const generateInitialSetup = () => {
     const domain = location.state?.domain || "Data Science";
-    const level = location.state?.skillLevel || "Intermediate";
+    const level = location.state?.skillLevel || "Beginner";
     
+    // Force the domain to update to the newly selected one!
+    setUserDomain(domain);
+
     let initialTasks = [
-      { id: 1, text: "Advanced Machine Learning", completed: true },
+      { id: 1, text: "Advanced Machine Learning", completed: false },
       { id: 2, text: "Build a Major Project", completed: false },
       { id: 3, text: "Participate in Hackathon", completed: false },
       { id: 4, text: "Earn Certification", completed: false }
     ];
+    
     if (domain === "Full Stack Dev") {
       initialTasks = [
-        { id: 1, text: "Advanced React Patterns", completed: true },
+        { id: 1, text: "Advanced React Patterns", completed: false },
         { id: 2, text: "Build a Full-Stack E-Commerce App", completed: false },
         { id: 3, text: "Setup Docker Containers", completed: false },
         { id: 4, text: "Deploy to AWS", completed: false }
       ];
+    } else if (domain === "AI/ML") {
+      initialTasks = [
+        { id: 1, text: "Master Neural Networks & PyTorch", completed: false },
+        { id: 2, text: "Build a Computer Vision Model", completed: false },
+        { id: 3, text: "Deploy Model with FastAPI", completed: false },
+        { id: 4, text: "Publish Research Paper", completed: false }
+      ];
     }
+    
     setTasks(initialTasks);
 
     let base = level === 'Beginner' ? 25 : level === 'Intermediate' ? 50 : 80;
-    setSkills({ python: Math.min(base + 10, 100), ml: base, projects: base - 10, certs: base - 20 });
+    setSkills({ 
+      python: Math.min(base + 10, 100), 
+      ml: base, 
+      projects: Math.max(base - 10, 0), 
+      certs: Math.max(base - 20, 0) 
+    });
   };
 
-  // NEW: 2. Save Data to SQLite whenever Tasks/Skills change
   useEffect(() => {
-    if (isLoadingDB) return; // Don't save while initially loading
-
+    if (isLoadingDB) return; 
     const saveUserData = async () => {
       try {
         await fetch(`http://127.0.0.1:8000/api/user/${USER_ID}/save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            domain: userDomain,
-            skills: skills,
-            tasks: tasks
-          })
+          body: JSON.stringify({ domain: userDomain, skills: skills, tasks: tasks })
         });
-      } catch (error) {
-        console.error("Failed to save to DB:", error);
-      }
+      } catch (error) { console.error("Failed to save:", error); }
     };
-
     saveUserData();
-  }, [tasks, skills, userDomain]); // Triggers every time these change!
+  }, [tasks, skills, userDomain, USER_ID]); 
 
-  // 3. The AI Prediction Effect
   useEffect(() => {
     if (isLoadingDB) return;
-    
     const fetchPrediction = async () => {
       setIsPredicting(true);
       try {
@@ -110,7 +121,27 @@ function Dashboard() {
       } catch (error) { setIsPredicting(false); }
     };
     fetchPrediction();
-  }, [skills]);
+  }, [skills, isLoadingDB]);
+
+  // NEW: Fetch dynamic projects whenever the domain changes
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        // We use encodeURIComponent to handle spaces in domains like "Full Stack Dev"
+        const response = await fetch(`http://127.0.0.1:8000/api/projects/${encodeURIComponent(userDomain)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setRecommendedProjects(data);
+        }
+      } catch (error) {
+        console.error("Failed to load projects:", error);
+      }
+    };
+    
+    if (userDomain) {
+      fetchProjects();
+    }
+  }, [userDomain]);
 
   const toggleTask = (taskId) => {
     setTasks(tasks.map(task => {
@@ -133,7 +164,8 @@ function Dashboard() {
   }
 
   const completedTasksCount = tasks.filter(t => t.completed).length;
-  const progressPercentage = Math.round((completedTasksCount / tasks.length) * 100);
+  // Safety check to prevent dividing by zero (NaN)
+  const progressPercentage = tasks.length === 0 ? 0 : Math.round((completedTasksCount / tasks.length) * 100);
 
   const generateSkillGaps = () => {
     const gaps = [];
@@ -164,7 +196,7 @@ function Dashboard() {
 
       <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto py-3 px-6 text-slate-700 font-medium flex items-center">
-          <span>Welcome, <span className="text-[#1e40af] font-bold">Rahul!</span></span>
+          <span>Welcome, <span className="text-[#1e40af] font-bold">{userName}!</span></span>
           <span className="text-slate-300 mx-3">|</span> 
           <span>Target: <span className="font-bold">{userDomain}</span></span>
         </div>
@@ -258,17 +290,28 @@ function Dashboard() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               
+               {/* NEW: Dynamic Senior Projects Hub */}
                <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-                 <h2 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Senior Projects Hub</h2>
+                 <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h2 className="text-lg font-bold text-slate-800">Senior Projects Hub</h2>
+                    <span className="text-xs font-bold text-[#1e40af] bg-blue-100 px-2 py-1 rounded">For {userDomain}</span>
+                 </div>
+                 
                  <div className="space-y-3">
-                    <div className="border border-slate-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-                      <div className="bg-[#2563eb] text-white p-2 font-medium text-sm">Full Stack E-Commerce App</div>
-                      <div className="bg-slate-50 p-2 text-xs text-slate-600">Anjali & Team</div>
-                    </div>
-                    <div className="border border-slate-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-                      <div className="bg-[#2563eb] text-white p-2 font-medium text-sm">Crop Yield Prediction</div>
-                      <div className="bg-slate-50 p-2 text-xs text-slate-600">Vikram S.</div>
-                    </div>
+                    {recommendedProjects.length > 0 ? (
+                      recommendedProjects.map((project, idx) => (
+                        <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                          <div className={`${project.color} text-white p-2 font-medium text-sm flex justify-between items-center`}>
+                            {project.title}
+                            <span className="text-[10px] uppercase bg-white/20 px-2 py-0.5 rounded">{project.tag}</span>
+                          </div>
+                          <div className="bg-slate-50 p-2 text-xs text-slate-600">By {project.author}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-slate-500 text-center py-4">Loading project ideas...</div>
+                    )}
                  </div>
                </div>
 
