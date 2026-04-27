@@ -31,7 +31,7 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Define the Database Table (NEW: Added email and password)
+# Define the Database Table (NEW: Added email, password, and year)
 
 
 class DBUserProgress(Base):
@@ -41,6 +41,7 @@ class DBUserProgress(Base):
     password_hash = Column(String)
     name = Column(String, default="Student")
     domain = Column(String, default="Data Science")
+    year = Column(String, default="1st Year")  # NEW: Added year column
     python = Column(Integer, default=0)
     ml = Column(Integer, default=0)
     projects = Column(Integer, default=0)
@@ -114,6 +115,7 @@ class StudentSkills(BaseModel):
 
 class UserSaveData(BaseModel):
     domain: str
+    year: str  # NEW: Require year
     skills: StudentSkills
     tasks: list
 
@@ -130,7 +132,7 @@ class UserRegister(BaseModel):
 
 # --- API Endpoints ---
 
-# NEW: Register Endpoint
+# Register Endpoint
 
 
 @app.post("/api/register")
@@ -150,7 +152,7 @@ def register_user(user: UserRegister, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return {"message": "User created successfully", "user_id": new_user.id, "name": new_user.name}
 
-# NEW: Login Endpoint
+# Login Endpoint
 
 
 @app.post("/api/login")
@@ -187,6 +189,7 @@ def save_user_progress(user_id: int, data: UserSaveData, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="User not found")
 
     db_user.domain = data.domain
+    db_user.year = data.year  # NEW: Save year to database
     db_user.python = data.skills.python
     db_user.ml = data.skills.ml
     db_user.projects = data.skills.projects
@@ -208,6 +211,7 @@ def load_user_progress(user_id: int, db: Session = Depends(get_db)):
         "exists": True,
         "name": db_user.name,
         "domain": db_user.domain,
+        "year": db_user.year,  # NEW: Load year from database
         "skills": {
             "python": db_user.python,
             "ml": db_user.ml,
@@ -217,8 +221,43 @@ def load_user_progress(user_id: int, db: Session = Depends(get_db)):
         "tasks": json.loads(db_user.tasks_json)
     }
 
+# --- NEW: Leaderboard Endpoint ---
 
-# --- NEW: Dynamic Projects Database & Endpoint ---
+
+@app.get("/api/leaderboard")
+def get_leaderboard(db: Session = Depends(get_db)):
+    users = db.query(DBUserProgress).all()
+    leaderboard = []
+
+    # Add real users from your database
+    for u in users:
+        total_score = u.python + u.ml + u.projects + u.certs
+        leaderboard.append({
+            "name": u.name,
+            "domain": u.domain,
+            "score": total_score
+        })
+
+    # Add mock students so the demo looks populated and competitive!
+    if len(leaderboard) < 5:
+        mocks = [
+            {"name": "Ananya S.", "domain": "Cloud Computing", "score": 310},
+            {"name": "Rahul M.", "domain": "AI/ML", "score": 285},
+            {"name": "Priya K.", "domain": "Data Science", "score": 240},
+            {"name": "Vikram T.", "domain": "Full Stack Dev", "score": 190}
+        ]
+        # Only add mocks that aren't already in the list to avoid duplicates
+        existing_names = [u["name"] for u in leaderboard]
+        for m in mocks:
+            if m["name"] not in existing_names:
+                leaderboard.append(m)
+
+    # Sort by highest score first
+    leaderboard.sort(key=lambda x: x["score"], reverse=True)
+    return leaderboard[:5]  # Return top 5
+
+# --- Dynamic Projects Database & Endpoint ---
+
 
 PROJECTS_DB = {
     "Data Science": [
@@ -254,7 +293,6 @@ PROJECTS_DB = {
 }
 
 
-# To this line:
 @app.get("/api/projects/{domain:path}")
 def get_recommended_projects(domain: str):
     domain_key = domain if domain in PROJECTS_DB else "Default"

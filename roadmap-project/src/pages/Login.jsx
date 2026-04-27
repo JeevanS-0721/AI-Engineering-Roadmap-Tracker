@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 function Login() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+  
+  // Using email state to hold the "Student ID" so it matches our existing backend
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -28,16 +30,11 @@ function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        // Save user details to browser storage
         localStorage.setItem('userId', data.user_id);
         localStorage.setItem('userName', data.name);
         
-        // Route new users to Onboarding, returning users to Dashboard
-        if (isLogin) {
-          navigate('/dashboard');
-        } else {
-          navigate('/onboarding');
-        }
+        // Everyone goes to dashboard in the new flow, Domain Explorer is accessed from there
+        navigate('/dashboard');
       } else {
         setError(data.detail || 'Authentication failed');
       }
@@ -48,57 +45,62 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center font-sans p-4">
-      <div className="text-center mb-8">
-        <span className="text-5xl block mb-4" role="img" aria-label="brain">🧠</span>
-        <h1 className="text-3xl font-extrabold text-slate-900">AI Roadmap Tracker</h1>
-        <p className="text-slate-500 mt-2">Your path to becoming placement-ready.</p>
-      </div>
-
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 w-full max-w-md">
-        <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">
-          {isLogin ? 'Sign in to your account' : 'Create a new account'}
-        </h2>
+    // Dark background matching the ProPath OS design
+    <div className="min-h-screen bg-[#131b2f] flex flex-col justify-center items-center font-sans p-4">
+      
+      {/* Main Login Card */}
+      <div className="bg-[#1e273f] p-10 rounded-2xl shadow-2xl border border-slate-700/50 w-full max-w-md">
+        
+        {/* Header Section */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="bg-indigo-500 p-3 rounded-xl mb-4 shadow-lg shadow-indigo-500/30">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-wide">ProPath OS</h1>
+         
+        </div>
         
         {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-200">
+          <div className="bg-red-900/50 text-red-300 p-3 rounded-lg text-sm mb-6 border border-red-800">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           {!isLogin && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+              <label className="block text-xs font-bold text-slate-400 mb-1.5 tracking-wider uppercase">Full Name</label>
               <input 
                 type="text" 
                 required 
-                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all"
+                className="w-full p-3 bg-[#131b2f] border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder-slate-600"
                 value={name} 
                 onChange={(e) => setName(e.target.value)} 
-                placeholder="John Doe"
+                placeholder="Enter Name..."
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email address</label>
+            <label className="block text-xs font-bold text-slate-400 mb-1.5 tracking-wider uppercase">Student ID (Email)</label>
             <input 
-              type="email" 
+              type="text" 
               required 
-              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all"
+              className="w-full p-3 bg-[#131b2f] border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder-slate-600"
               value={email} 
               onChange={(e) => setEmail(e.target.value)} 
-              placeholder="student@college.edu"
+              placeholder="Enter ID..."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+            <label className="block text-xs font-bold text-slate-400 mb-1.5 tracking-wider uppercase">Password</label>
             <input 
               type="password" 
               required 
-              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all"
+              className="w-full p-3 bg-[#131b2f] border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder-slate-600"
               value={password} 
               onChange={(e) => setPassword(e.target.value)} 
               placeholder="••••••••"
@@ -108,19 +110,19 @@ function Login() {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full bg-[#1e40af] text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-800 transition-colors mt-2 disabled:bg-blue-400"
+            className="w-full bg-indigo-500 text-white font-bold py-3.5 px-4 rounded-xl hover:bg-indigo-600 transition-colors mt-4 disabled:bg-indigo-500/50 flex justify-center items-center gap-2 shadow-lg shadow-indigo-500/25"
           >
-            {isLoading ? 'Processing...' : (isLogin ? 'Sign In & Continue' : 'Register & Start Journey')}
+            {isLoading ? 'Processing...' : (isLogin ? 'Sign In' : 'Register')}
+            {!isLoading && <span>→</span>}
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-slate-600">
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
+        <div className="mt-8 text-center text-sm text-slate-500">
           <button 
             onClick={() => { setIsLogin(!isLogin); setError(''); }} 
-            className="text-blue-600 font-bold hover:underline"
+            className="hover:text-indigo-400 transition-colors"
           >
-            {isLogin ? 'Sign up' : 'Log in'}
+            {isLogin ? "Need an account? Register here" : "Already have an account? Sign in"}
           </button>
         </div>
       </div>

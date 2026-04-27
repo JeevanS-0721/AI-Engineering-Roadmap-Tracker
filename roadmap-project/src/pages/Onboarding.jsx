@@ -5,21 +5,23 @@ function Onboarding() {
   const navigate = useNavigate();
   const [selectedDomain, setSelectedDomain] = useState(null);
   const [selectedSkill, setSelectedSkill] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(null);
 
   const domains = ['Data Science', 'Full Stack Dev', 'AI/ML', 'Testing', 'UI/UX Design', 'Cloud Computing'];
   const skills = ['Beginner', 'Intermediate', 'Advanced'];
+  const years = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
   const handleFinish = () => {
-    if (selectedDomain && selectedSkill) {
-      // NEW: We are passing the selected data as 'state' to the next route!
+    if (selectedDomain && selectedSkill && selectedYear) {
       navigate('/dashboard', { 
         state: { 
           domain: selectedDomain, 
-          skillLevel: selectedSkill 
+          skillLevel: selectedSkill,
+          year: selectedYear
         } 
       });
     } else {
-      alert("Please select both a domain and a skill level!");
+      alert("Please complete all three sections!");
     }
   };
 
@@ -65,6 +67,26 @@ function Onboarding() {
                 }`}
               >
                 {skill}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* NEW: Academic Year Selection */}
+        <div className="bg-white shadow-sm border border-slate-200 rounded-xl p-6 md:p-8">
+          <h3 className="text-xl font-bold text-slate-800 mb-4 border-b pb-2">3. Current Academic Year 🎓</h3>
+          <div className="flex flex-col sm:flex-row gap-4">
+            {years.map((year) => (
+              <button
+                key={year}
+                onClick={() => setSelectedYear(year)}
+                className={`flex-1 p-4 rounded-lg border text-center font-medium transition-all ${
+                  selectedYear === year 
+                    ? 'bg-purple-50 border-purple-500 text-purple-700 ring-1 ring-purple-500' 
+                    : 'bg-white border-slate-200 text-slate-600 hover:border-purple-300 hover:bg-slate-50'
+                }`}
+              >
+                {year}
               </button>
             ))}
           </div>
